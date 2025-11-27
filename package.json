@@ -1,0 +1,14 @@
+{
+  "name": "summer",
+  "version": "0.0.1",
+  "description": "Summer — a from-scratch HTTP server, router, load balancer & reverse proxy",
+  "main": "src/core/summer.js",
+  "scripts": {
+    "start": "node src/core/summer.js",
+    "start:debug": "NODE_ENV=development node --enable-source-maps src/core/summer.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}
