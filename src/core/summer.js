@@ -1,5 +1,6 @@
 import net from "net";
 import { Request } from "./request.js";
+import { Response } from "./response.js";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8080;
 const HOST = "0.0.0.0";
@@ -45,11 +46,14 @@ const server = net.createServer((socket) => {
     console.log(`[req] ${req.method} ${req.path} HTTP/${req.httpVersion}`);
     console.log("[headers]", req.headers);
 
-    const response = makeSimpleHttpResponse(
-      `Parsed request: ${req.method} ${req.path}`
-    );
+    const res = new Response(socket);
 
-    socket.write(response, () => socket.end());
+    res.json({
+      method: req.method,
+      path: req.path,
+      version: req.httpVersion,
+      headers: req.headers,
+    });
   });
 
   socket.on("end", () => {
