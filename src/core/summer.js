@@ -1,6 +1,9 @@
 import net from "net";
 import { Request } from "./request.js";
 import { Response } from "./response.js";
+import { router } from "./index.js";
+
+import "../app.js";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8080;
 const HOST = "0.0.0.0";
@@ -47,13 +50,15 @@ const server = net.createServer((socket) => {
     console.log("[headers]", req.headers);
 
     const res = new Response(socket);
+    const match = router.match(req.method, req.path);
 
-    res.json({
-      method: req.method,
-      path: req.path,
-      version: req.httpVersion,
-      headers: req.headers,
-    });
+    if (!match) {
+      res.status(404).text("Route not found");
+      return;
+    }
+
+    req.params = match.params;
+    match.handler(req, res);
   });
 
   socket.on("end", () => {
