@@ -4,7 +4,7 @@
 - [X] 1.1 TCP server
 - [X] 1.2 HTTP parser
 - [X] 1.3 Response builder
-- [ ] 1.4 Router
+- [X] 1.4 Router
 - [ ] 1.5 Keep-Alive connection handling
 
 ## 2. Core Logic Layer
