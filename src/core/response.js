@@ -1,18 +1,16 @@
-// src/core/response.js
-// Builds HTTP responses in a structured way.
-
 export class Response {
   constructor(socket) {
     this.socket = socket;
 
     this.statusCode = 200;
     this.headers = {
-      'Server': 'Summer/0.1',
-      'Connection': 'close'
+      Server: "Summer/0.1",
+      Connection: "close",
     };
 
-    this._body = null; // Buffer or string
+    this._body = null;
     this._sent = false;
+    this._keepAlive = false;
   }
 
   status(code) {
@@ -25,45 +23,54 @@ export class Response {
     return this;
   }
 
-  // --- core sending functions ---
+  setKeepAlive(flag) {
+    this._keepAlive = flag;
+    this.headers["Connection"] = flag ? "keep-alive" : "close";
+  }
 
   send(data) {
     if (this._sent) return;
     this._sent = true;
 
-    // Normalize to Buffer
+    // Normalize body to Buffer
     if (Buffer.isBuffer(data)) {
       this._body = data;
     } else {
-      this._body = Buffer.from(String(data), 'utf8');
+      this._body = Buffer.from(String(data), "utf8");
     }
 
-    // Set content-length
-    this.headers["Content-Length"] = this._body.length;
-
-    // If no content-type set, default text/plain
+    // Ensure content-type exists
     if (!this.headers["Content-Type"]) {
       this.headers["Content-Type"] = "text/plain; charset=utf-8";
     }
 
+    // Set content length
+    this.headers["Content-Length"] = this._body.length;
+
     // Build status line
-    const statusLine = `HTTP/1.1 ${this.statusCode} ${this.#statusMessage(this.statusCode)}`;
+    const statusLine = `HTTP/1.1 ${this.statusCode} ${this.#statusMessage(
+      this.statusCode
+    )}`;
 
-    // Build header lines
+    // Build headers
     const headerLines = Object.entries(this.headers)
-      .map(([k, v]) => `${k}: ${v}`)
-      .join('\r\n');
+      .map(([key, value]) => `${key}: ${value}`)
+      .join("\r\n");
 
-    // Final full response buffer
-    const head = Buffer.from(statusLine + '\r\n' + headerLines + '\r\n\r\n');
+    // Combine head + body into one buffer
+    const head = Buffer.from(statusLine + "\r\n" + headerLines + "\r\n\r\n");
     const full = Buffer.concat([head, this._body]);
 
+    // Write response
     this.socket.write(full, () => {
-      this.socket.end();
+      if (!this._keepAlive) {
+        this.socket.end();
+      }
+      // else keep connection open for next request
     });
   }
 
-  // common convenience functions
+  // ---- convenience helpers ----
   json(obj) {
     this.setHeader("Content-Type", "application/json; charset=utf-8");
     this.send(JSON.stringify(obj));
@@ -79,7 +86,7 @@ export class Response {
     this.send(String(str));
   }
 
-  // --- helper: map status codes to messages ---
+  // ---- private ----
   #statusMessage(code) {
     const messages = {
       200: "OK",
@@ -89,7 +96,7 @@ export class Response {
       401: "Unauthorized",
       403: "Forbidden",
       404: "Not Found",
-      500: "Internal Server Error"
+      500: "Internal Server Error",
     };
     return messages[code] || "OK";
   }
