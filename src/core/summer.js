@@ -7,21 +7,6 @@ import "../app.js";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8080;
 const HOST = "0.0.0.0";
-const SERVER_NAME = "Summer/0.1";
-
-function makeSimpleHttpResponse(body = "Hello from Summer v0.1") {
-  const payload = String(body);
-  return [
-    "HTTP/1.1 200 OK",
-    `Date: ${new Date().toUTCString()}`,
-    "Content-Type: text/plain; charset=utf-8",
-    `Content-Length: ${Buffer.byteLength(payload, "utf8")}`,
-    `Server: ${SERVER_NAME}`,
-    "Connection: close",
-    "",
-    payload,
-  ].join("\r\n");
-}
 
 const server = net.createServer((socket) => {
   const remote = `${socket.remoteAddress}:${socket.remotePort}`;
@@ -29,36 +14,57 @@ const server = net.createServer((socket) => {
 
   let buffer = Buffer.alloc(0);
 
+  // Idle timeout for keep-alive clients
+  socket.setTimeout(5000);
+  socket.on("timeout", () => {
+    console.log(`[timeout] closing idle connection ${remote}`);
+    socket.end();
+  });
+
   socket.on("data", (chunk) => {
     buffer = Buffer.concat([buffer, chunk]);
 
-    const headerEnd = buffer.indexOf(Buffer.from("\r\n\r\n"));
-    if (headerEnd === -1) {
-      return;
+    while (true) {
+      const headerEnd = buffer.indexOf(Buffer.from("\r\n\r\n"));
+      if (headerEnd === -1) return; // Wait for more data
+
+      let req;
+      try {
+        req = new Request(buffer);
+      } catch (err) {
+        console.error("[parser] invalid request:", err.message);
+        socket.end(); 
+        return;
+      }
+
+      console.log(`[req] ${req.method} ${req.path} HTTP/${req.httpVersion}`);
+
+      const res = new Response(socket);
+
+      // Detect keep-alive
+      const wantsKeepAlive =
+        req.headers["connection"] &&
+        req.headers["connection"].toLowerCase() === "keep-alive";
+
+      res.setKeepAlive(wantsKeepAlive);
+
+      // Route matching
+      const match = router.match(req.method, req.path);
+
+      if (!match) {
+        res.status(404).text("Route not found");
+      } else {
+        req.params = match.params;
+        match.handler(req, res);
+      }
+
+      // Calculate how many bytes belong to this request
+      const consumed = headerEnd + 4 + req.body.length;
+      buffer = buffer.slice(consumed);
+
+      // If no more complete requests in buffer → wait for next data
+      if (buffer.length === 0) break;
     }
-
-    let req;
-    try {
-      req = new Request(buffer);
-    } catch (err) {
-      console.error("[parser] invalid request:", err.message);
-      socket.end();
-      return;
-    }
-
-    console.log(`[req] ${req.method} ${req.path} HTTP/${req.httpVersion}`);
-    console.log("[headers]", req.headers);
-
-    const res = new Response(socket);
-    const match = router.match(req.method, req.path);
-
-    if (!match) {
-      res.status(404).text("Route not found");
-      return;
-    }
-
-    req.params = match.params;
-    match.handler(req, res);
   });
 
   socket.on("end", () => {
